@@ -1,0 +1,41 @@
+From de4437ff7491658d55a3293a2a06e1edcef0a7db Mon Sep 17 00:00:00 2001
+From: Jason Chen <jason.z.chen@intel.corp-partner.google.com>
+Date: Mon, 22 Apr 2024 19:05:19 +0800
+Subject: [PATCH] ubuntu: build pass patch
+
+---
+ drivers/net/ethernet/realtek/r8169_main.c | 4 ++--
+ security/security.c                       | 2 ++
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index 3e630ab0a4bb..775bbfce8756 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
++++ b/drivers/net/ethernet/realtek/r8169_main.c
+@@ -5243,8 +5243,8 @@ static bool rtl_aspm_is_safe(struct rtl8169_private *tp)
+ 	  * 3: CLKEREQ
+ 	  * 4-7: Reserved
+ 	  */
+-	if (tp->mac_version >= RTL_GIGA_MAC_VER_61 &&
+-		r8168_mac_ocp_read(tp, 0xc0b2) & 0xf ||
++	if ((tp->mac_version >= RTL_GIGA_MAC_VER_61 &&
++		(r8168_mac_ocp_read(tp, 0xc0b2) & 0xf)) ||
+ 		rtl_aspm_dell_workaround(tp))
+ 		return true;
+ 
+diff --git a/security/security.c b/security/security.c
+index ec754a919803..7e38fbf6d65f 100644
+--- a/security/security.c
++++ b/security/security.c
+@@ -212,6 +212,8 @@ static void __init lsm_set_blob_size(int *need, int *lbs)
+ 	*need = offset;
+ }
+ 
++int lsm_key_alloc(struct key *key);
++
+ static void __init lsm_set_blob_sizes(struct lsm_blob_sizes *needed)
+ {
+ 	if (!needed)
+-- 
+2.34.1
+
