@@ -1,0 +1,25 @@
+From e3d64b67fe56f2a29b15a06780941cc8d7879e3b Mon Sep 17 00:00:00 2001
+From: Jason Chen <jason.z.chen@intel.corp-partner.google.com>
+Date: Wed, 8 May 2024 23:25:18 +0800
+Subject: [PATCH] ubuntu: cpufreq compilation failed
+
+---
+ drivers/cpufreq/cpufreq.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/cpufreq/cpufreq.c b/drivers/cpufreq/cpufreq.c
+index f5b8d2e1de8a..0b1d0a74f1e9 100644
+--- a/drivers/cpufreq/cpufreq.c
++++ b/drivers/cpufreq/cpufreq.c
+@@ -2900,7 +2900,7 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
+ 		driver_data->name, cpufreq_driver_name);
+ 
+ 	if (cpufreq_driver_name[0])
+-		if (!driver_data->name ||
++		if (!driver_data->name[0] ||
+ 			strcmp(cpufreq_driver_name, driver_data->name))
+ 				return -EINVAL;
+ 
+-- 
+2.34.1
+
