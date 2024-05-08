@@ -931,7 +931,6 @@ struct hm2172 {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
-	struct v4l2_ctrl *privacy_status;
 #endif
 
 	/* Current mode */
@@ -1109,13 +1108,6 @@ static int hm2172_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = hm2172_test_pattern(hm2172, ctrl->val);
 		break;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	case V4L2_CID_PRIVACY:
-		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
-		break;
-#endif
-
 	default:
 		ret = -EINVAL;
 		break;
@@ -1142,13 +1134,7 @@ static int hm2172_init_controls(struct hm2172 *hm2172)
 	int ret = 0;
 
 	ctrl_hdlr = &hm2172->ctrl_handler;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
-#else
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
-#endif
-
 	if (ret)
 		return ret;
 
@@ -1183,13 +1169,6 @@ static int hm2172_init_controls(struct hm2172 *hm2172)
 	if (hm2172->hblank)
 		hm2172->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	hm2172->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr, &hm2172_ctrl_ops,
-						   V4L2_CID_PRIVACY, 0, 1, 1,
-						   !(hm2172->status.status));
-#endif
-
 	v4l2_ctrl_new_std(ctrl_hdlr, &hm2172_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
 			  HM2172_ANAL_GAIN_MIN, HM2172_ANAL_GAIN_MAX,
 			  HM2172_ANAL_GAIN_STEP, HM2172_ANAL_GAIN_MIN);
@@ -1222,17 +1201,6 @@ static void hm2172_update_pad_format(const struct hm2172_mode *mode,
 	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;
 	fmt->field = V4L2_FIELD_NONE;
 }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-static void hm2172_vsc_privacy_callback(void *handle,
-				       enum vsc_privacy_status status)
-{
-	struct hm2172 *hm2172 = handle;
-
-	v4l2_ctrl_s_ctrl(hm2172->privacy_status, !status);
-}
-#endif
 
 static int hm2172_start_streaming(struct hm2172 *hm2172)
 {
@@ -1347,13 +1315,8 @@ static int hm2172_power_on(struct device *dev)
 						hm2172, &hm2172->status);
 		if (ret == -EAGAIN)
 			return -EPROBE_DEFER;
-		if (ret) {
+		if (ret)
 			dev_err(dev, "Acquire VSC failed");
-			return ret;
-		}
-		if (hm2172->privacy_status)
-			__v4l2_ctrl_s_ctrl(hm2172->privacy_status,
-						!(hm2172->status.status));
 
 		return ret;
 	}

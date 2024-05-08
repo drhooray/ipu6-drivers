@@ -300,7 +300,6 @@ struct ov01a10 {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
-	struct v4l2_ctrl *privacy_status;
 #endif
 
 	/* Streaming on/off */
@@ -469,13 +468,6 @@ static int ov01a10_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = ov01a10_test_pattern(ov01a10, ctrl->val);
 		break;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	case V4L2_CID_PRIVACY:
-		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
-		break;
-#endif
-
 	default:
 		ret = -EINVAL;
 		break;
@@ -500,12 +492,7 @@ static int ov01a10_init_controls(struct ov01a10 *ov01a10)
 	int ret = 0;
 
 	ctrl_hdlr = &ov01a10->ctrl_handler;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
-#else
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
-#endif
 	if (ret)
 		return ret;
 
@@ -538,14 +525,6 @@ static int ov01a10_init_controls(struct ov01a10 *ov01a10)
 					    1, h_blank);
 	if (ov01a10->hblank)
 		ov01a10->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
-    IS_ENABLED(CONFIG_INTEL_VSC)
-	ov01a10->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr,
-						    &ov01a10_ctrl_ops,
-						    V4L2_CID_PRIVACY, 0, 1, 1,
-						    !(ov01a10->status.status));
-#endif
 
 	v4l2_ctrl_new_std(ctrl_hdlr, &ov01a10_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
 			  OV01A10_ANAL_GAIN_MIN, OV01A10_ANAL_GAIN_MAX,
@@ -663,14 +642,6 @@ static int ov01a10_set_stream(struct v4l2_subdev *sd, int enable)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
     IS_ENABLED(CONFIG_INTEL_VSC)
-static void ov01a10_vsc_privacy_callback(void *handle,
-				       enum vsc_privacy_status status)
-{
-	struct ov01a10 *ov01a10 = handle;
-
-	v4l2_ctrl_s_ctrl(ov01a10->privacy_status, !status);
-}
-
 static int ov01a10_power_off(struct device *dev)
 {
 	struct v4l2_subdev *sd = dev_get_drvdata(dev);
