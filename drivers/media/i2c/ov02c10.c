@@ -15,6 +15,7 @@
     IS_ENABLED(CONFIG_INTEL_VSC)
 #include <linux/vsc.h>
 #endif
+#include <linux/intel_cvs.h>
 
 #define OV02C10_LINK_FREQ_400MHZ	400000000ULL
 #define OV02C10_SCLK			80000000LL
@@ -681,12 +682,17 @@ struct ov02c10 {
 	struct v4l2_ctrl *vblank;
 	struct v4l2_ctrl *hblank;
 	struct v4l2_ctrl *exposure;
-	struct v4l2_ctrl *privacy_status;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
+	struct v4l2_ctrl *privacy_status;
 #endif
+
+	struct cvs_mipi_config cvs_conf;
+	struct cvs_camera_status cvs_status;
+	//struct v4l2_ctrl *cvs_privacy_status;
+
 	/* Current mode */
 	const struct ov02c10_mode *cur_mode;
 
@@ -836,9 +842,12 @@ static int ov02c10_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = ov02c10_test_pattern(ov02c10, ctrl->val);
 		break;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
 	case V4L2_CID_PRIVACY:
 		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
 		break;
+#endif
 
 	default:
 		ret = -EINVAL;
@@ -864,7 +873,12 @@ static int ov02c10_init_controls(struct ov02c10 *ov02c10)
 	int ret = 0;
 
 	ctrl_hdlr = &ov02c10->ctrl_handler;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
+#else
+	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
+#endif
 	if (ret)
 		return ret;
 
@@ -903,11 +917,6 @@ static int ov02c10_init_controls(struct ov02c10 *ov02c10)
 						    &ov02c10_ctrl_ops,
 						    V4L2_CID_PRIVACY, 0, 1, 1,
 						    !(ov02c10->status.status));
-#else
-	ov02c10->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr,
-						    &ov02c10_ctrl_ops,
-						    V4L2_CID_PRIVACY,
-						    0, 1, 1, 0);
 #endif
 
 	v4l2_ctrl_new_std(ctrl_hdlr, &ov02c10_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
@@ -1069,6 +1078,44 @@ static int ov02c10_set_stream(struct v4l2_subdev *sd, int enable)
 	return ret;
 }
 
+//test
+static void ov02c10_cvs_privacy_callback(void *handle,
+					enum cvs_privacy_status status)
+{
+	//struct ov02c10 *ov02c10 = handle;
+}
+
+static int ov02c10_power_off(struct device *dev)
+{
+	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+	struct ov02c10 *ov02c10 = to_ov02c10(sd);
+	int ret;
+
+	ret = cvs_release_camera_sensor(&ov02c10->cvs_status);
+	if (ret && ret != -EAGAIN)
+		dev_err(dev, "Release CVS failed");
+	return ret;
+}
+
+static int ov02c10_power_on(struct device *dev)
+{
+	struct v4l2_subdev *sd = dev_get_drvdata(dev);
+	struct ov02c10 *ov02c10 = to_ov02c10(sd);
+	int ret;
+	ov02c10->cvs_conf.lane_num = ov02c10->mipi_lanes;
+	ret = cvs_acquire_camera_sensor(&ov02c10->cvs_conf,
+					ov02c10_cvs_privacy_callback,
+					ov02c10, &ov02c10->cvs_status);
+	if (ret && ret != -EAGAIN) {
+		dev_err(dev, "Acquire VSC failed");
+		return ret;
+	}
+	return ret;
+}
+
+
+//test end
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
     IS_ENABLED(CONFIG_INTEL_VSC)
 static void ov02c10_vsc_privacy_callback(void *handle,
@@ -1104,8 +1151,11 @@ static int ov02c10_power_on(struct device *dev)
 	ret = vsc_acquire_camera_sensor(&ov02c10->conf,
 					ov02c10_vsc_privacy_callback,
 					ov02c10, &ov02c10->status);
-	if (ret && ret != -EAGAIN)
+	if (ret && ret != -EAGAIN) {
 		dev_err(dev, "Acquire VSC failed");
+		return ret;
+	}
+	__v4l2_ctrl_s_ctrl(ov02c10->privacy_status, !(ov02c10->status.status));
 
 	return ret;
 }
@@ -1516,6 +1566,21 @@ static int ov02c10_probe(struct i2c_client *client)
 	}
 #endif
 
+	//test
+	ov02c10->mipi_lanes = OV02C10_DATA_LANES;
+	ov02c10->cvs_conf.lane_num = ov02c10->mipi_lanes;
+	ov02c10->cvs_conf.freq=OV02C10_LINK_FREQ_400MHZ / 100000;
+	ret = cvs_acquire_camera_sensor(&ov02c10->cvs_conf,
+					ov02c10_cvs_privacy_callback,
+					ov02c10, &ov02c10->cvs_status);
+	if (ret == -EAGAIN) {
+		return -EPROBE_DEFER;
+	} else if (ret) {
+		dev_err(&client->dev, "Acquire CVS failed");
+		return ret;
+	}
+	//test end
+
 	ret = ov02c10_identify_module(ov02c10);
 	if (ret) {
 		dev_err(&client->dev, "failed to find sensor: %d", ret);
@@ -1574,6 +1639,8 @@ probe_error_ret:
 	ov02c10_power_off(&client->dev);
 #endif
 
+	ov02c10_power_off(&client->dev);
+
 	return ret;
 }
 
@@ -1583,6 +1650,7 @@ static const struct dev_pm_ops ov02c10_pm_ops = {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	SET_RUNTIME_PM_OPS(ov02c10_power_off, ov02c10_power_on, NULL)
 #endif
+	SET_RUNTIME_PM_OPS(ov02c10_power_off, ov02c10_power_on, NULL)
 };
 
 #ifdef CONFIG_ACPI
