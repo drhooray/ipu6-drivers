@@ -619,6 +619,7 @@ struct hm2170 {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
+	struct v4l2_ctrl *privacy_status;
 #endif
 	/* Current mode */
 	const struct hm2170_mode *cur_mode;
@@ -791,6 +792,13 @@ static int hm2170_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = hm2170_test_pattern(hm2170, ctrl->val);
 		break;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	case V4L2_CID_PRIVACY:
+		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
+		break;
+#endif
+
 	default:
 		ret = -EINVAL;
 		break;
@@ -817,7 +825,12 @@ static int hm2170_init_controls(struct hm2170 *hm2170)
 	int ret = 0;
 
 	ctrl_hdlr = &hm2170->ctrl_handler;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
+#else
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
+#endif
 	if (ret)
 		return ret;
 
@@ -851,6 +864,12 @@ static int hm2170_init_controls(struct hm2170 *hm2170)
 					   h_blank);
 	if (hm2170->hblank)
 		hm2170->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	hm2170->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr, &hm2170_ctrl_ops,
+						   V4L2_CID_PRIVACY, 0, 1, 1,
+						   !(hm2170->status.status));
+#endif
 
 	v4l2_ctrl_new_std(ctrl_hdlr, &hm2170_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
 			  HM2170_ANAL_GAIN_MIN, HM2170_ANAL_GAIN_MAX,
@@ -884,6 +903,17 @@ static void hm2170_update_pad_format(const struct hm2170_mode *mode,
 	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;
 	fmt->field = V4L2_FIELD_NONE;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+static void hm2170_vsc_privacy_callback(void *handle,
+					enum vsc_privacy_status status)
+{
+	struct hm2170 *hm2170 = handle;
+
+	v4l2_ctrl_s_ctrl(hm2170->privacy_status, !status);
+}
+#endif
 
 static int hm2170_start_streaming(struct hm2170 *hm2170)
 {
@@ -981,8 +1011,11 @@ static int hm2170_power_on(struct device *dev)
 	ret = vsc_acquire_camera_sensor(&hm2170->conf,
 					hm2170_vsc_privacy_callback,
 					hm2170, &hm2170->status);
-	if (ret && ret != -EAGAIN)
+	if (ret && ret != -EAGAIN) {
 		dev_err(dev, "Acquire VSC failed");
+		return ret;
+	}
+	__v4l2_ctrl_s_ctrl(hm2170->privacy_status, !(hm2170->status.status));
 
 	return ret;
 }

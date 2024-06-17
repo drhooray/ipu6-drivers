@@ -293,6 +293,7 @@ struct ov02e10 {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
+	struct v4l2_ctrl *privacy_status;
 #endif
 
 	/* Current mode */
@@ -485,6 +486,13 @@ static int ov02e10_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = ov02e10_test_pattern(ov02e10, ctrl->val);
 		break;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	case V4L2_CID_PRIVACY:
+		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
+		break;
+#endif
+
 	default:
 		ret = -EINVAL;
 		break;
@@ -512,7 +520,13 @@ static int ov02e10_init_controls(struct ov02e10 *ov02e10)
 	int ret;
 
 	ctrl_hdlr = &ov02e10->ctrl_handler;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
+#else
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
+#endif
+
 	if (ret)
 		return ret;
 
@@ -547,6 +561,13 @@ static int ov02e10_init_controls(struct ov02e10 *ov02e10)
 	if (ov02e10->hblank)
 		ov02e10->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	ov02e10->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr, &ov02e10_ctrl_ops,
+						    V4L2_CID_PRIVACY, 0, 1, 1,
+						    !(ov02e10->status.status));
+#endif
+
 	v4l2_ctrl_new_std(ctrl_hdlr, &ov02e10_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
 			  OV02E10_ANAL_GAIN_MIN, OV02E10_ANAL_GAIN_MAX,
 			  OV02E10_ANAL_GAIN_STEP, OV02E10_ANAL_GAIN_MIN);
@@ -580,6 +601,17 @@ static void ov02e10_update_pad_format(const struct ov02e10_mode *mode,
 	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;
 	fmt->field = V4L2_FIELD_NONE;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+static void ov02e10_vsc_privacy_callback(void *handle,
+				       enum vsc_privacy_status status)
+{
+	struct ov02e10 *ov02e10 = handle;
+
+	v4l2_ctrl_s_ctrl(ov02e10->privacy_status, !status);
+}
+#endif
 
 static int ov02e10_start_streaming(struct ov02e10 *ov02e10)
 {
@@ -769,8 +801,13 @@ static int ov02e10_power_on(struct device *dev)
 						ov02e10, &ov02e10->status);
 		if (ret == -EAGAIN)
 			return -EPROBE_DEFER;
-		if (ret)
+		if (ret) {
 			dev_err(dev, "Acquire VSC failed");
+			return ret;
+		}
+		if (ov02e10->privacy_status)
+			__v4l2_ctrl_s_ctrl(ov02e10->privacy_status,
+					!(ov02e10->status.status));
 
 		return ret;
 	}

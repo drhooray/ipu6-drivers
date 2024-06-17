@@ -514,6 +514,7 @@ struct hi556 {
     IS_ENABLED(CONFIG_INTEL_VSC)
 	struct vsc_mipi_config conf;
 	struct vsc_camera_status status;
+	struct v4l2_ctrl *privacy_status;
 #endif
 	/* Current mode */
 	const struct hi556_mode *cur_mode;
@@ -703,6 +704,13 @@ static int hi556_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = hi556_test_pattern(hi556, ctrl->val);
 		break;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	case V4L2_CID_PRIVACY:
+		dev_dbg(&client->dev, "set privacy to %d", ctrl->val);
+		break;
+#endif
+
 	default:
 		ret = -EINVAL;
 		break;
@@ -724,7 +732,12 @@ static int hi556_init_controls(struct hi556 *hi556)
 	int ret;
 
 	ctrl_hdlr = &hi556->ctrl_handler;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 9);
+#else
 	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 8);
+#endif
 	if (ret)
 		return ret;
 
@@ -758,6 +771,12 @@ static int hi556_init_controls(struct hi556 *hi556)
 					  h_blank);
 	if (hi556->hblank)
 		hi556->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+	hi556->privacy_status = v4l2_ctrl_new_std(ctrl_hdlr, &hi556_ctrl_ops,
+						  V4L2_CID_PRIVACY, 0, 1, 1,
+						  !(hi556->status.status));
+#endif
 
 	v4l2_ctrl_new_std(ctrl_hdlr, &hi556_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
 			  HI556_ANAL_GAIN_MIN, HI556_ANAL_GAIN_MAX,
@@ -816,6 +835,17 @@ static int hi556_identify_module(struct hi556 *hi556)
 
 	return 0;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0) && \
+    IS_ENABLED(CONFIG_INTEL_VSC)
+static void hi556_vsc_privacy_callback(void *handle,
+				       enum vsc_privacy_status status)
+{
+	struct hi556 *hi556 = handle;
+
+	v4l2_ctrl_s_ctrl(hi556->privacy_status, !status);
+}
+#endif
 
 static int hi556_start_streaming(struct hi556 *hi556)
 {
@@ -942,8 +972,13 @@ static int hi556_power_on(struct device *dev)
 						hi556, &hi556->status);
 		if (ret == -EAGAIN)
 			return -EPROBE_DEFER;
-		if (ret)
+		if (ret) {
 			dev_err(dev, "Acquire VSC failed");
+			return ret;
+		}
+		if (hi556->privacy_status)
+			__v4l2_ctrl_s_ctrl(hi556->privacy_status,
+					   !(hi556->status.status));
 
 		return ret;
 	}
@@ -1347,7 +1382,6 @@ static int hi556_probe(struct i2c_client *client)
 	}
 
 	v4l2_i2c_subdev_init(&hi556->sd, client, &hi556_subdev_ops);
-
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 	full_power = acpi_dev_state_d0(&client->dev);
