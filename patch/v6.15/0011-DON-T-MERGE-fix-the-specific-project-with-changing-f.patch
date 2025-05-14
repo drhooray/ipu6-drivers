@@ -1,0 +1,25 @@
+From f27cb9f1f20810731ed7dbe548909646f0c4a929 Mon Sep 17 00:00:00 2001
+From: Jason Chen <jason.z.chen@intel.com>
+Date: Wed, 14 May 2025 17:52:22 +0800
+Subject: [PATCH 1/2] [DON'T MERGE] fix the specific project with changing freq
+
+---
+ drivers/media/pci/intel/ipu-bridge.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/media/pci/intel/ipu-bridge.c b/drivers/media/pci/intel/ipu-bridge.c
+index 1cb745855600..6c7e4906c93c 100644
+--- a/drivers/media/pci/intel/ipu-bridge.c
++++ b/drivers/media/pci/intel/ipu-bridge.c
+@@ -76,7 +76,7 @@ static const struct ipu_sensor_config ipu_supported_sensors[] = {
+ 	/* Omnivision OV08A10 */
+ 	IPU_SENSOR_CONFIG("OVTI08A1", 1, 500000000),
+ 	/* Omnivision OV08x40 */
+-	IPU_SENSOR_CONFIG("OVTI08F4", 1, 400000000),
++	IPU_SENSOR_CONFIG("OVTI08F4", 3, 400000000, 600000000, 775000000),
+ 	/* Omnivision OV13B10 */
+ 	IPU_SENSOR_CONFIG("OVTI13B1", 1, 560000000),
+ 	IPU_SENSOR_CONFIG("OVTIDB10", 1, 560000000),
+-- 
+2.34.1
+

@@ -1,0 +1,71 @@
+From 4d2f348560f4b78f270810c3be09be999ad770c9 Mon Sep 17 00:00:00 2001
+From: Jason Chen <jason.z.chen@intel.com>
+Date: Wed, 14 May 2025 17:53:39 +0800
+Subject: [PATCH 2/2] [DON'T MERGE] changing the freq because of 3rd component
+ impact
+
+---
+ drivers/media/i2c/ov08x40.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/media/i2c/ov08x40.c b/drivers/media/i2c/ov08x40.c
+index d44a8f1a09c5..46496873e219 100644
+--- a/drivers/media/i2c/ov08x40.c
++++ b/drivers/media/i2c/ov08x40.c
+@@ -108,7 +108,7 @@
+ 
+ enum {
+ 	OV08X40_LINK_FREQ_400MHZ_INDEX,
+-	OV08X40_LINK_FREQ_749MHZ_INDEX,
++	OV08X40_LINK_FREQ_600MHZ_INDEX,
+ };
+ 
+ struct ov08x40_reg {
+@@ -1179,7 +1179,7 @@ static const char * const ov08x40_test_pattern_menu[] = {
+ 
+ /* Configurations for supported link frequencies */
+ #define OV08X40_LINK_FREQ_400MHZ	400000000ULL
+-#define OV08X40_LINK_FREQ_749MHZ	749000000ULL
++#define OV08X40_LINK_FREQ_600MHZ	600000000ULL
+ #define OV08X40_SCLK_96MHZ		96000000ULL
+ #define OV08X40_XVCLK			19200000
+ #define OV08X40_DATA_LANES		4
+@@ -1199,7 +1199,7 @@ static u64 link_freq_to_pixel_rate(u64 f)
+ /* Menu items for LINK_FREQ V4L2 control */
+ static const s64 link_freq_menu_items[] = {
+ 	OV08X40_LINK_FREQ_400MHZ,
+-	OV08X40_LINK_FREQ_749MHZ,
++	OV08X40_LINK_FREQ_600MHZ,
+ };
+ 
+ /* Link frequency configs */
+@@ -1210,7 +1210,7 @@ static const struct ov08x40_link_freq_config link_freq_configs[] = {
+ 			.regs = mipi_data_rate_800mbps,
+ 		}
+ 	},
+-	[OV08X40_LINK_FREQ_749MHZ_INDEX] = {
++	[OV08X40_LINK_FREQ_600MHZ_INDEX] = {
+ 		.reg_list = {
+ 			.num_of_regs = ARRAY_SIZE(mipi_data_rate_1500mbps),
+ 			.regs = mipi_data_rate_1500mbps,
+@@ -1277,7 +1277,7 @@ static const struct ov08x40_mode supported_modes[] = {
+ 			.num_of_regs = ARRAY_SIZE(mode_3856x2176_regs_1500mbps),
+ 			.regs = mode_3856x2176_regs_1500mbps,
+ 		},
+-		.link_freq_index = OV08X40_LINK_FREQ_749MHZ_INDEX,
++		.link_freq_index = OV08X40_LINK_FREQ_600MHZ_INDEX,
+ 		.exposure_shift = 1,
+ 		.exposure_margin = OV08X40_EXPOSURE_MAX_MARGIN,
+ 	},
+@@ -1292,7 +1292,7 @@ static const struct ov08x40_mode supported_modes[] = {
+ 			.num_of_regs = ARRAY_SIZE(mode_1928x1088_regs_1500mbps),
+ 			.regs = mode_1928x1088_regs_1500mbps,
+ 		},
+-		.link_freq_index = OV08X40_LINK_FREQ_749MHZ_INDEX,
++		.link_freq_index = OV08X40_LINK_FREQ_600MHZ_INDEX,
+ 		.exposure_shift = 0,
+ 		.exposure_margin = OV08X40_EXPOSURE_MAX_MARGIN,
+ 	},
+-- 
+2.34.1
+
